@@ -1,3 +1,4 @@
+// Package utils package provide functions that implement all basic features required for envdir cli tool
 package utils
 
 import (
@@ -10,23 +11,24 @@ import (
 
 // ReadDir function parse all files in provided path and
 // convert it to map of environment variables where
-// key is file name and value is file content
+// key is file name and value is file content.
 func ReadDir(path string) (map[string]string, error) {
 	err := IsDirExists(path)
 	if err != nil {
-		return nil, fmt.Errorf("[utils.ReadDir] invalid path (%s) provided: %w", path, err)
+		return nil, &InvalidPathError{err, path}
 	}
 
 	files, err := ioutil.ReadDir(path)
 	if err != nil {
-		return nil, fmt.Errorf("[utils.ReadDir] cannot scan directory: %w", err)
+		return nil, &CannotScanDirError{err}
 	}
 
 	if len(files) == 0 {
-		return nil, fmt.Errorf("[utils.ReadDir] provided directory %s is empty", path)
+		return nil, &EnvDirIsEmptyError{path}
 	}
 
 	env := make(map[string]string)
+
 	for _, file := range files {
 		if file.IsDir() {
 			continue
@@ -34,7 +36,7 @@ func ReadDir(path string) (map[string]string, error) {
 
 		content, err := ioutil.ReadFile(path + "/" + file.Name())
 		if err != nil {
-			log.Printf("[utils.ReadDir] cannot read file content %s: %s", path + "/" + file.Name(), err)
+			log.Printf("[utils.ReadDir] cannot read file content %s: %s", path+"/"+file.Name(), err)
 
 			env[file.Name()] = ""
 		} else {
@@ -45,10 +47,10 @@ func ReadDir(path string) (map[string]string, error) {
 	return env, nil
 }
 
-// RunCommand run command with arguments and environment variables
+// RunCommand run command with arguments and environment variables.
 func RunCommand(cmd []string, env map[string]string) int {
-	var envStrings []string
-	for key,val := range env {
+	envStrings := make([]string, 0, len(env))
+	for key, val := range env {
 		envStrings = append(envStrings, fmt.Sprintf("%s=%s", key, val))
 	}
 
@@ -56,32 +58,31 @@ func RunCommand(cmd []string, env map[string]string) int {
 	command.Env = envStrings
 	command.Stdout = os.Stdout
 
-	err := command.Run()
-	if err != nil {
+	if command.Run() != nil {
 		return 1
 	}
 
 	return 0
 }
 
-// IsDirExists check if provided path exists and it's directory
+// IsDirExists check if provided path exists and it's directory.
 func IsDirExists(path string) error {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return fmt.Errorf("[utils.IsDirExists] directory %s is not exists", path)
+		return &EnvDirIsNotExistsError{path}
 	}
 
 	file, err := os.Open(path)
 	if err != nil {
-		return fmt.Errorf("[utils.IsDirExists] cannot open file: %w", err)
+		return &CannotOpenEnvDirError{err, path}
 	}
 
 	fileInfo, err := file.Stat()
 	if err != nil {
-		return fmt.Errorf("[utils.IsDirExists] cannot read file info: %w", err)
+		return &CannotReadFileInfoError{err, path}
 	}
 
 	if !fileInfo.IsDir() {
-		return fmt.Errorf("[utils.IsDirExists] provided path is not a directory")
+		return &ProvidedPathIsNotDirError{path}
 	}
 
 	return nil
